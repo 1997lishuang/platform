@@ -1,0 +1,73 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+config/*.env
+!config/*.example.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+src/*.egg-info/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime logs and local process state
+log/**
+!log/.gitkeep
+*.log
+*.err
+*.pid
+*.job
+backend.dev.pid
+frontend.dev.job
+
+# Uploaded files, generated reports and local runtime data
+uploads/**
+!uploads/.gitkeep
+outputs/**
+!outputs/.gitkeep
+data/**
+!data/.gitkeep
+rules/bid_strategy/**
+!rules/bid_strategy/.gitkeep
+
+# Local spreadsheets and generated office files
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+~$*
+
+# Local databases and binary stores
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

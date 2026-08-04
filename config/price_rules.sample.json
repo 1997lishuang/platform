@@ -1,0 +1,59 @@
+{
+  "version": "2026.07-sample",
+  "currency": "CNY",
+  "rules": [
+    {
+      "id": "PHC-300-AB-70-C80",
+      "item_name_contains": "预制钢筋混凝土桩",
+      "unit": "m",
+      "feature_conditions": {
+        "桩型": "PHC-300-AB-70",
+        "混凝土种类与强度等级": "C80"
+      },
+      "unit_price": 82.0,
+      "source": "企业样例价格库-桩基工程"
+    },
+    {
+      "id": "PHC-300-B-70-C80",
+      "item_name_contains": "预制钢筋混凝土桩",
+      "unit": "m",
+      "feature_conditions": {
+        "桩型": "PHC-300-B-70",
+        "混凝土种类与强度等级": "C80"
+      },
+      "unit_price": 86.0,
+      "source": "企业样例价格库-桩基工程"
+    },
+    {
+      "id": "PV-MODULE-730WP",
+      "item_name_contains": "光伏组件安装",
+      "unit": "块",
+      "feature_conditions": {
+        "组件型号": "730Wp"
+      },
+      "unit_price": 7.5,
+      "source": "企业样例价格库-安装工程"
+    },
+    {
+      "id": "FIXED-SUPPORT",
+      "item_name_contains": "固定支架",
+      "unit": "t",
+      "feature_conditions": {
+        "支架类型": "固定支架"
+      },
+      "unit_price": 780.0,
+      "source": "企业样例价格库-安装工程"
+    },
+    {
+      "id": "TEMP-ROAD-GRAVEL",
+      "item_name_contains": "施工临时道路",
+      "unit": "㎡",
+      "feature_conditions": {
+        "路面类型": "碎石路面"
+      },
+      "unit_price": 38.0,
+      "source": "企业样例价格库-措施费"
+    }
+  ]
+}
+

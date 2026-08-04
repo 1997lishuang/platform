@@ -1,0 +1,32 @@
+[project]
+name = "boq-pricing-engine"
+version = "0.1.0"
+description = "Enterprise-grade BOQ parsing, feature extraction, pricing, and validation engine."
+requires-python = ">=3.10"
+dependencies = [
+  "openpyxl>=3.1.0",
+]
+
+[project.optional-dependencies]
+api = [
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.27.0",
+  "python-multipart>=0.0.9",
+]
+db = [
+  "sqlalchemy>=2.0.0",
+  "alembic>=1.13.0",
+  "mysql-connector-python>=9.0.0",
+]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.6.0",
+]
+
+[project.scripts]
+boq-price = "boq_pricing.cli:main"
+boq-api = "boq_pricing.api.main:run"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

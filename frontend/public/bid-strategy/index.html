@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>投标智能报价系统</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Bid Pricing Agent</p>
+        <h1>投标智能报价系统</h1>
+      </div>
+      <div class="status-pill" id="statusText">初始化</div>
+    </header>
+
+    <section class="summary-grid" aria-live="polite">
+      <article class="stat-card">
+        <span>推荐报价区间</span>
+        <strong id="bestBid">-</strong>
+        <small id="bestBidNote">输入参数后自动计算</small>
+      </article>
+      <article class="stat-card">
+        <span>我方价格分</span>
+        <strong id="bestScore">-</strong>
+        <small id="scoreNote">以价格分最高视为中标</small>
+      </article>
+      <article class="stat-card">
+        <span>评标基准价</span>
+        <strong id="benchmark">-</strong>
+        <small id="benchmarkNote">包含我方报价后重算</small>
+      </article>
+      <article class="stat-card">
+        <span>中标概率</span>
+        <strong id="scoreGap">-</strong>
+        <small id="gapNote">基于随机模拟</small>
+      </article>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel">
+        <h2>报价输入</h2>
+        <div class="form-grid">
+          <label>
+            最高报价限制
+            <input id="ceilingInput" type="number" min="1" step="1000" value="7600000">
+          </label>
+          <label>
+            我的成本/保本线
+            <input id="floorInput" type="number" min="1" step="1000" value="6000000">
+          </label>
+          <label>
+            成本搜索调整 %
+            <input id="minProfitRateInput" type="number" min="-50" step="0.1" value="-5">
+            <small class="field-note">可填负数向成本以下下探；如 -5 表示从成本 × 95% 开始搜索。</small>
+          </label>
+          <label>
+            搜索步长
+            <input id="stepInput" type="number" min="1" step="100" value="10000">
+          </label>
+          <label>
+            小数精度
+            <input id="precisionInput" type="number" min="0" max="6" step="1" value="3">
+          </label>
+          <label>
+            市场合理均价 μ（可留空自动估算）
+            <input id="marketMeanInput" type="number" min="1" step="1000" placeholder="留空按最高限价的 85%/90%/95% 模拟">
+          </label>
+          <label>
+            报价离散程度 σ
+            <input id="sigmaInput" type="number" min="0" step="1000" value="380000">
+            <small id="sigmaAutoNote" class="field-note">默认按最高限价 × 5% 自动估算，可手动调整。</small>
+          </label>
+          <label>
+            投标人数模式
+            <select id="bidderModeInput">
+              <option value="range">范围随机</option>
+              <option value="fixed">固定人数</option>
+            </select>
+          </label>
+          <label>
+            固定总人数 n
+            <input id="bidderCountInput" type="number" min="2" step="1" value="8">
+          </label>
+          <label>
+            最少总人数 n_min
+            <input id="bidderMinInput" type="number" min="2" step="1" value="5">
+          </label>
+          <label>
+            最多总人数 n_max
+            <input id="bidderMaxInput" type="number" min="2" step="1" value="12">
+          </label>
+          <label>
+            模拟次数 N
+            <input id="simulationCountInput" type="number" min="100" step="100" value="5000">
+          </label>
+        </div>
+
+        <label class="stacked">
+          评分规则
+          <select id="ruleSelect"></select>
+        </label>
+
+        <div class="button-row">
+          <button id="runButton" type="button">重新计算</button>
+          <button id="sampleButton" type="button" class="secondary">填入示例</button>
+          <button id="autoSigmaButton" type="button" class="secondary">σ按最高限价自动</button>
+        </div>
+        <p class="hint">不需要输入竞争对手报价。若不知道 μ，可留空，系统会按最高限价的 85%、90%、95% 三个市场场景随机生成对手报价，并寻找稳健最优报价。</p>
+      </aside>
+
+      <section class="panel main-panel">
+        <div class="section-head">
+          <div>
+            <h2>报价得分曲线</h2>
+            <p id="chartCaption">横轴为我方投标总报价，纵轴为价格分。</p>
+          </div>
+          <div class="legend">
+            <span><i class="line"></i>我方分数</span>
+            <span><i class="band"></i>可中标区间</span>
+          </div>
+        </div>
+        <svg id="scoreChart" viewBox="0 0 920 360" role="img" aria-labelledby="chartTitle chartDesc">
+          <title id="chartTitle">投标报价得分模拟曲线</title>
+          <desc id="chartDesc">展示不同报价下的价格分以及可中标范围。</desc>
+        </svg>
+        <div id="chartTooltip" class="chart-tooltip" hidden></div>
+        <div id="messageBox" class="message"></div>
+      </section>
+    </section>
+
+    <section class="workspace lower">
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <h2>规则文件导入</h2>
+            <p>把图片、PDF、Word、TXT 放到项目根目录或 rules 文件夹，刷新列表后解析。</p>
+          </div>
+          <button id="refreshFilesButton" type="button" class="secondary">刷新文件</button>
+        </div>
+
+        <div class="import-layout">
+          <div>
+            <label>
+              规则文件
+              <select id="ruleFileSelect"></select>
+            </label>
+            <div class="button-row">
+              <button id="parseRuleButton" type="button">解析为规则草稿</button>
+              <button id="saveParsedRuleButton" type="button" class="secondary">确认保存规则</button>
+            </div>
+            <p class="hint" id="backendStatus">MinerU/Ollama 状态检测中。</p>
+          </div>
+          <label>
+            识别文本
+            <textarea id="extractedText" class="small-textarea" spellcheck="false" placeholder="解析后显示 MinerU/PDF/Word/TXT 提取出的规则文本"></textarea>
+          </label>
+        </div>
+
+        <label class="stacked">
+          规则草稿 JSON
+          <textarea id="draftRuleJson" class="json-textarea" spellcheck="false" placeholder="解析后显示可确认保存的规则配置"></textarea>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <h2>结果展示</h2>
+            <p>模拟时展示推荐报价区间；开标后回测时展示投标单位、基准价、得分和排名。</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>指标/投标单位</th>
+                <th>总报价</th>
+                <th>基准价</th>
+                <th>数值</th>
+                <th>补充</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody id="rankingBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel backtest-panel">
+      <div class="section-head">
+        <div>
+          <h2>开标后回测与校准</h2>
+          <p>把已开标的总报价逐行粘贴进来，可用“报价金额”或“单位名称 - 报价金额”格式；系统会按当前评分规则复算基准价、偏差率、得分和排名，并可反推 μ、σ、n 用于下次模拟。</p>
+        </div>
+      </div>
+      <label class="stacked">
+        已开标总报价
+        <textarea id="actualBidsInput" class="small-textarea" spellcheck="false" placeholder="每行一个报价，或“单位名称 - 报价金额”，例如：&#10;中国能源建设集团江苏省电力建设第一工程有限 - 215820971&#10;某某建设有限公司 - 218500000.00&#10;33979590.59"></textarea>
+      </label>
+      <div class="button-row">
+        <button id="backtestButton" type="button">按当前规则复算开标结果</button>
+        <button id="calibrateButton" type="button" class="secondary">用开标数据校准模拟参数</button>
+        <button id="exportBacktestButton" type="button" class="secondary" disabled>导出Excel</button>
+      </div>
+      <p class="hint">校准会把投标人数改为固定 n，并用已开标报价的均值和样本标准差填入 μ、σ。最高限价和我的成本仍按你的项目实际情况手动输入。</p>
+    </section>
+
+    <section class="panel rules-panel">
+      <div class="section-head">
+        <div>
+          <h2>规则库</h2>
+          <p>已确认规则会出现在报价计算的下拉框里；自动解析出的规则建议先复核再保存。</p>
+        </div>
+      </div>
+      <div id="ruleCards" class="rule-cards"></div>
+    </section>
+  </main>
+
+  <script src="app.js?v=platform-compatible-20260803"></script>
+</body>
+</html>
