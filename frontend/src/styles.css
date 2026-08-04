@@ -1294,6 +1294,7 @@ tr.submitted-row td {
 .choice-pill {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   margin: 0 6px 6px 0;
   border: 1px solid #cfe2d8;
   border-radius: 999px;
@@ -1301,6 +1302,42 @@ tr.submitted-row td {
   color: #16734a;
   padding: 4px 10px;
   cursor: pointer;
+}
+
+.choice-pill em,
+.choice-pill small {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.choice-pill small {
+  border-left: 1px solid currentColor;
+  padding-left: 6px;
+  opacity: 0.72;
+}
+
+.choice-pill[data-confidence='below'] {
+  border-color: #ead8ad;
+  background: #fff9eb;
+  color: #8a5a08;
+}
+
+.candidate-help {
+  margin: 2px 0 0;
+  color: #6a7888;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.info-strip {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d8e4f2;
+  border-radius: 8px;
+  background: #f7fbff;
+  color: #516376;
+  line-height: 1.55;
 }
 
 .pager {

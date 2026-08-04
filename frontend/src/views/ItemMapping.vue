@@ -23,6 +23,9 @@
         <span class="field-hint">当前阈值：{{ thresholdPercent }}%</span>
         <button class="primary" @click="saveSetting"><Save :size="17" />保存阈值</button>
       </div>
+      <div class="info-strip">
+        阈值只控制“是否自动通过映射”。低于 {{ thresholdPercent }}% 的清单项会进入人工校准；候选标准对象仍会展示相近项，低于阈值的候选仅供人工参考，不会自动计价通过。
+      </div>
     </section>
 
     <section class="panel">
@@ -67,10 +70,17 @@
                 v-for="candidate in review.candidates"
                 :key="String(candidate.mapping_code || candidate.standard_item_name)"
                 class="choice-pill"
+                :data-confidence="candidateMeetsThreshold(candidate) ? 'pass' : 'below'"
+                :title="candidateTitle(candidate)"
                 @click="selectCandidate(review, String(candidate.standard_item_name || ''))"
               >
-                {{ candidate.standard_item_name }}（{{ formatScore(candidate.score) }}）
+                <span>{{ candidate.standard_item_name }}</span>
+                <em>{{ formatScore(candidate.score) }}</em>
+                <small>{{ candidateMeetsThreshold(candidate) ? '达标' : '低于阈值' }}</small>
               </button>
+              <p class="candidate-help">
+                最佳候选 {{ bestCandidateScore(review) }}；低于 {{ thresholdPercent }}% 表示系统已拦截为人工校准。
+              </p>
             </td>
             <td class="conditions-cell">{{ formatConditions(review.features as Record<string, string>) }}</td>
             <td>
@@ -315,6 +325,28 @@ function formatScore(value: unknown) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return '-'
   return `${Math.round(numeric * 100)}%`
+}
+
+function candidateScore(candidate: Record<string, unknown>) {
+  const numeric = Number(candidate.score)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
+function candidateMeetsThreshold(candidate: Record<string, unknown>) {
+  return candidateScore(candidate) >= thresholdPercent.value / 100
+}
+
+function candidateTitle(candidate: Record<string, unknown>) {
+  const thresholdText = candidateMeetsThreshold(candidate)
+    ? '达到当前阈值，可作为优先候选复核'
+    : `低于当前 ${thresholdPercent.value}% 阈值，仅供人工参考，不会自动通过`
+  const reason = String(candidate.reason || '').trim()
+  return reason ? `${thresholdText}；匹配原因：${reason}` : thresholdText
+}
+
+function bestCandidateScore(review: ItemMappingReviewSummary) {
+  const best = Math.max(0, ...review.candidates.map(candidateScore))
+  return formatScore(best)
 }
 
 function formatDate(value: string | null | undefined) {

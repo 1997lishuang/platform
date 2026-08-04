@@ -74,15 +74,31 @@ class PricingEngine:
     def suggest_rule_mappings(self, item: BillItem, min_score: float = 0.45) -> list[tuple[str, str, float, str]]:
         suggestions: list[tuple[str, str, float, str]] = []
         features = item.features.values if item.features else {}
+        feature_text = compact(item.feature_text).lower()
+        feature_values = [compact(value).lower() for value in features.values() if compact(value)]
         for rule in self._rules:
             name_similarity = score_name_match(item.item_name, rule.item_name_contains)
-            if name_similarity < min_score:
+            rule_name = compact(rule.item_name_contains).lower()
+            feature_name_hits = sum(
+                1
+                for value in feature_values
+                if len(value) >= 2 and (value in rule_name or rule_name in value)
+            )
+            feature_text_similarity = score_name_match(feature_text, rule_name) if feature_text and rule_name else 0.0
+            feature_signal = max(
+                min(1.0, feature_name_hits * 0.35),
+                feature_text_similarity if feature_text_similarity >= 0.55 else 0.0,
+            )
+            combined_similarity = max(name_similarity, feature_signal)
+            if combined_similarity < min_score:
                 continue
             if rule.unit and item.unit and normalize_unit(rule.unit) != normalize_unit(item.unit):
                 continue
 
             reasons = [f"规则名称相似度 {name_similarity:.0%}"]
-            score = Decimal("0.65") * Decimal(str(name_similarity))
+            if feature_signal > name_similarity:
+                reasons.append(f"项目特征相似度 {feature_signal:.0%}")
+            score = Decimal("0.65") * Decimal(str(name_similarity)) + Decimal("0.15") * Decimal(str(feature_signal))
             if rule.unit and item.unit:
                 score += Decimal("0.15")
                 reasons.append("单位匹配")
@@ -97,6 +113,9 @@ class PricingEngine:
                     continue
                 score += Decimal("0.20")
                 reasons.append("特征条件匹配")
+            elif feature_signal:
+                score += Decimal("0.10")
+                reasons.append("项目特征参与排序")
 
             suggestions.append((
                 f"RULE:{rule.rule_id}:{rule.version}",

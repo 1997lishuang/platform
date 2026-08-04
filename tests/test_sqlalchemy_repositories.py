@@ -103,6 +103,37 @@ def test_item_mapping_repository_uses_configurable_confidence_threshold():
     assert decision.standard_item_name == "PHC管桩"
 
 
+def test_item_mapping_repository_uses_feature_text_for_candidate_score():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    repository = ItemMappingRepository(session_factory)
+    repository.update_setting(Decimal("0.7000"), username="admin")
+    item = BillItem(
+        sequence="1.1",
+        item_code=None,
+        item_name="保护管",
+        feature_text="用于电力电缆保护",
+        unit="m",
+        quantity=Decimal("10"),
+        original_unit_price=None,
+        original_total_price=None,
+        work_content=None,
+        remark=None,
+        source=SourceRef("sample.xlsx", "Sheet1", 2),
+    )
+    item.features = FeatureSet(item.feature_text, {"用途": "电力电缆保护"})
+
+    repository.upsert(ItemMappingInput("MAP-CABLE", "保护管", "电缆保护管", ["电力", "电缆"], "m", {}, "active"))
+    repository.upsert(ItemMappingInput("MAP-COMM", "保护管", "通讯保护管", ["通讯"], "m", {}, "active"))
+
+    decision = repository.resolve(item)
+
+    assert decision.status == "mapped"
+    assert decision.standard_item_name == "电缆保护管"
+    assert "特征关键词命中" in decision.candidates[0].reason
+
+
 def test_sqlalchemy_price_rule_repository_crud_and_pagination():
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)

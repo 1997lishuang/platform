@@ -401,6 +401,7 @@ def review_persisted_clause():
 def score_mapping(mapping: ItemMappingORM, item: BillItem) -> MappingCandidate | None:
     item_name = compact(item.item_name).lower()
     source_name = compact(mapping.source_item_name).lower()
+    standard_name = compact(mapping.standard_item_name).lower()
     score = 0.0
     reasons: list[str] = []
 
@@ -412,13 +413,34 @@ def score_mapping(mapping: ItemMappingORM, item: BillItem) -> MappingCandidate |
         score += 0.55 * name_similarity
         reasons.append(f"项目名称相似度 {name_similarity:.0%}")
 
+    features = item.features.values if item.features else {}
+    feature_values = [compact(value).lower() for value in features.values() if compact(value)]
+    feature_text = compact(item.feature_text).lower()
+    keywords = [compact(keyword).lower() for keyword in mapping.match_keywords_json or [] if compact(keyword)]
+
     keyword_hits = 0
-    for keyword in mapping.match_keywords_json or []:
-        if compact(keyword).lower() in item_name:
+    feature_keyword_hits = 0
+    for keyword in keywords:
+        if keyword in item_name:
             keyword_hits += 1
+        elif keyword in feature_text or any(keyword in value or value in keyword for value in feature_values):
+            feature_keyword_hits += 1
     if keyword_hits:
         score += min(0.25, keyword_hits * 0.08)
         reasons.append(f"关键词命中 {keyword_hits} 个")
+    if feature_keyword_hits:
+        score += min(0.18, feature_keyword_hits * 0.09)
+        reasons.append(f"特征关键词命中 {feature_keyword_hits} 个")
+
+    if feature_values and not (mapping.feature_conditions_json or {}):
+        feature_name_hits = sum(
+            1
+            for value in feature_values
+            if len(value) >= 2 and (value in source_name or value in standard_name or value in "".join(keywords))
+        )
+        if feature_name_hits:
+            score += min(0.16, feature_name_hits * 0.08)
+            reasons.append(f"项目特征辅助匹配 {feature_name_hits} 项")
 
     if mapping.unit:
         if item.unit and normalize_unit(mapping.unit) == normalize_unit(item.unit):
@@ -427,7 +449,6 @@ def score_mapping(mapping: ItemMappingORM, item: BillItem) -> MappingCandidate |
         else:
             return None
 
-    features = item.features.values if item.features else {}
     conditions = mapping.feature_conditions_json or {}
     if conditions:
         matched = sum(1 for key, expected in conditions.items() if value_matches(features.get(key, ""), str(expected)))
