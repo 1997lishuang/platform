@@ -40,6 +40,10 @@ class MappingCandidate:
     standard_item_name: str
     score: float
     reason: str
+    source_item_name: str | None = None
+    unit: str | None = None
+    match_keywords: list[str] | None = None
+    feature_conditions: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +51,10 @@ class MappingCandidate:
             "standard_item_name": self.standard_item_name,
             "score": round(self.score, 4),
             "reason": self.reason,
+            "source_item_name": self.source_item_name,
+            "unit": self.unit,
+            "match_keywords": list(self.match_keywords or []),
+            "feature_conditions": dict(self.feature_conditions or {}),
         }
 
 
@@ -466,4 +474,8 @@ def score_mapping(mapping: ItemMappingORM, item: BillItem) -> MappingCandidate |
         standard_item_name=mapping.standard_item_name,
         score=min(1.0, score + priority_bonus),
         reason="；".join(reasons),
+        source_item_name=mapping.source_item_name,
+        unit=mapping.unit,
+        match_keywords=list(mapping.match_keywords_json or []),
+        feature_conditions=dict(mapping.feature_conditions_json or {}),
     )
