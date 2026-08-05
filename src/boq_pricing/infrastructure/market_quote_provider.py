@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from boq_pricing.parsing.features import informative_features
+
 
 @dataclass(frozen=True)
 class MarketQuoteRequest:
@@ -389,53 +391,30 @@ def build_market_quote_prompt(request: MarketQuoteRequest) -> str:
 
 def build_supplier_quote_prompt(request: MarketQuoteRequest) -> str:
     search_queries = build_market_quote_search_queries(request)
+    features = prepare_market_quote_features(request.features)
     return json.dumps(
         {
-            "task": "为工程量清单材料或设备执行在线市场询价，输出可审计的供应商报价。",
-            "search_strategy": {
-                "must_search_before_answer": True,
-                "search_queries": search_queries,
-                "source_priority": [
-                    "政府、造价站、造价协会、工程造价信息网发布的信息价",
-                    "公开招标公告、中标公告、采购清单、成交公告",
-                    "厂家官网、授权经销商商品详情页或报价页",
-                    "企业采购平台或电商企业采购页，但页面必须能看到规格和价格",
-                ],
-                "forbidden_sources": [
-                    "只包含名称但没有明确价格的页面",
-                    "搜索结果页、网站首页、泛列表页、分类页",
-                    "需要登录后才能看到价格的页面",
-                    "无规格、无单位、无价格、无来源链接的内容",
-                ],
-            },
-            "business_rules": [
-                "这是企业造价询价，模型只能做检索和结构化抽取，不能凭经验编造价格。",
-                "每条有效报价必须同时包含 supplier、price、unit、source_url、evidence。",
-                "source_url 必须是 http 或 https 的具体页面，打开后应能看到对应产品、规格、采购公告、信息价或价格证据。",
-                "evidence 必须写明价格数字及其与清单特征的匹配关系；如果页面只出现名称，没有价格，不要放入 quotes。",
-                "优先返回 3 条不同来源报价；如果只能找到 1 条真实有效报价，也可以返回 1 条，并在 assumptions 中说明原因。",
-                "必须核对项目名称、规格型号、材质、强度等级、长度、单位、工作内容等关键特征，不匹配的报价不得采用。",
-                "recommended_price 使用有效报价的算术平均值；剔除异常值时必须在 assumptions 中说明原因。",
-                "价格口径应说明是否含税、含运费、含安装，以及适用地区和月份。",
+            "task": "工程清单在线询价，抽取可审计供应商报价。",
+            "queries": search_queries,
+            "rules": [
+                "先搜索再回答；只采纳能看到产品/规格和价格的具体页面。",
+                "有效报价必须有 supplier、price、unit、source_url、evidence；不得编造链接或价格。",
+                "优先政府信息价、招采/中标公告、厂家或授权经销商报价页；排除首页、搜索页、登录后价格和无价页面。",
+                "最多返回3条不同来源；至少1条真实有效报价；recommended_price为有效报价均值。",
+                "核对名称、规格、材质、等级、单位、工作内容；不匹配需写入 discard_reasons。",
             ],
             "item": {
                 "code": request.item_code,
                 "name": request.item_name,
                 "unit": request.unit,
                 "quantity": request.quantity,
-                "features": request.features,
-                "work_content": request.work_content,
+                "features": features,
+                "work_content": compact_prompt_text(request.work_content, 120),
                 "remark": request.remark,
                 "region": request.region,
                 "price_month": request.price_month,
                 "standard": request.standard,
             },
-            "output_rules": [
-                "只输出严格 JSON，不要 markdown，不要解释性前后缀。",
-                "quotes 最多 3 条，有效报价至少 1 条；无有效报价时 quotes 为空，recommended_price 为 null。",
-                "不要编造链接；不要把搜索关键词、站点名称或首页当 source_url。",
-                "assumptions 必须包含 search_queries、discard_reasons、price_basis。",
-            ],
             "output_schema": {
                 "quotes": [
                     {
@@ -452,11 +431,7 @@ def build_supplier_quote_prompt(request: MarketQuoteRequest) -> str:
                 "recommended_price": "有效报价平均值，number or null",
                 "confidence": "0-1 number",
                 "source_urls": ["url"],
-                "assumptions": {
-                    "search_queries": ["query"],
-                    "discard_reasons": ["未采用来源及原因"],
-                    "price_basis": "价格口径说明",
-                },
+                "assumptions": {"search_queries": ["query"], "discard_reasons": ["原因"], "price_basis": "含税/运费/安装/地区月份"},
             },
         },
         ensure_ascii=False,
@@ -464,7 +439,7 @@ def build_supplier_quote_prompt(request: MarketQuoteRequest) -> str:
 
 
 def build_market_quote_search_queries(request: MarketQuoteRequest) -> list[str]:
-    feature_values = [str(value) for value in request.features.values() if value]
+    feature_values = [str(value) for value in prepare_market_quote_features(request.features).values() if value]
     feature_text = " ".join(feature_values)
     core = " ".join(part for part in [request.item_name, feature_text] if part).strip()
     region = request.region or "全国"
@@ -473,13 +448,31 @@ def build_market_quote_search_queries(request: MarketQuoteRequest) -> list[str]:
     queries = [
         f"{core} {region} {year_month} 采购价 含税",
         f"{core} {region} 信息价 工程造价",
-        f"{core} 造价通 价格查询",
-        f"{core} 招标公告 采购 清单",
+        f"{core} 造价通 招标公告 采购 清单",
         f"{core} 厂家 报价 产品详情",
     ]
     if standard:
         queries.append(f"{core} {standard} 采购价")
     return [query for query in queries if query.strip()]
+
+
+def prepare_market_quote_features(features: dict[str, str] | None, max_items: int = 8) -> dict[str, str]:
+    informative = informative_features(features)
+    compacted: dict[str, str] = {}
+    for key, value in informative.items():
+        compacted[compact_prompt_text(key, 24)] = compact_prompt_text(value, 80)
+        if len(compacted) >= max_items:
+            break
+    return compacted
+
+
+def compact_prompt_text(value: str | None, max_chars: int) -> str | None:
+    text = re.sub(r"\s+", " ", str(value or "")).strip(" ;；、")
+    if not text:
+        return None
+    if len(text) <= max_chars:
+        return text
+    return text[: max(1, max_chars - 1)].rstrip() + "…"
 
 
 def extract_chat_content(body: str) -> str:

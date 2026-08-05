@@ -11,6 +11,7 @@ from boq_pricing.infrastructure.market_quote_provider import (
     MarketQuoteProviderConfig,
     OpenAICompatibleMarketQuoteProvider,
     MarketQuoteRequest,
+    build_supplier_quote_prompt,
     build_market_quote_search_queries,
     create_market_quote_provider,
     extract_response_source_urls,
@@ -149,6 +150,32 @@ def test_build_market_quote_search_queries_include_pc_style_terms():
     assert "C80" in joined
     assert "造价通" in joined
     assert "招标公告" in joined
+
+
+def test_supplier_quote_prompt_filters_generic_features_and_limits_queries():
+    prompt = build_supplier_quote_prompt(
+        MarketQuoteRequest(
+            item_name="组串式逆变器",
+            unit="台",
+            features={
+                "规格型号": "320kW",
+                "其他技术要求": "满足相关技术规范及发包人要求",
+                "备注": "详见设计图纸",
+                "冗长说明": "这是一个" + "很长" * 80,
+            },
+            region="CN",
+            price_month="2026-07",
+            standard="GB13476-2023",
+            work_content="安装、调试、并网、试运行、资料移交。" * 20,
+        )
+    )
+    payload = parse_market_quote_json(prompt)
+
+    assert payload["item"]["features"]["规格型号"] == "320kW"
+    assert "其他技术要求" not in payload["item"]["features"]
+    assert "满足相关技术规范及发包人要求" not in prompt
+    assert len(payload["queries"]) <= 5
+    assert len(payload["item"]["work_content"]) <= 121
 
 
 def test_local_provider_uses_configurable_openai_compatible_endpoint(monkeypatch):

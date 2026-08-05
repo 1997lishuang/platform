@@ -40,6 +40,7 @@ from boq_pricing.infrastructure import (
 from boq_pricing.api.routes.pricing import to_task_status
 from boq_pricing.infrastructure.db import session_scope
 from boq_pricing.infrastructure.orm_models import PricingResultORM, PricingRunORM
+from boq_pricing.parsing.features import informative_features
 
 router = APIRouter(prefix="/market-quotes", tags=["market-quotes"])
 
@@ -53,6 +54,21 @@ def estimate_market_quote(
 ) -> MarketQuoteSummary:
     require_permission(user, "rule:create")
     session_factory = get_session_factory()
+    features = informative_features(payload.features)
+    repository = MarketQuoteRepository(
+        session_factory,
+        tenant_code=tenant_code,
+        pricing_task_code=payload.pricing_task_code,
+    )
+    reusable = repository.find_reusable(
+        item_name=payload.item_name,
+        unit=payload.unit,
+        features=features,
+        region_code=payload.region,
+    )
+    if reusable is not None:
+        return to_market_quote_summary(reusable)
+
     selected_provider = provider
     provider_config = None
     if selected_provider:
@@ -75,7 +91,7 @@ def estimate_market_quote(
             MarketQuoteRequest(
                 item_name=payload.item_name,
                 unit=payload.unit,
-                features=payload.features,
+                features=features,
                 region=payload.region,
                 price_month=payload.price_month,
                 standard=payload.standard,
