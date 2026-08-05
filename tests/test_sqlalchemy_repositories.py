@@ -134,6 +134,35 @@ def test_item_mapping_repository_uses_feature_text_for_candidate_score():
     assert "特征关键词命中" in decision.candidates[0].reason
 
 
+def test_item_mapping_repository_ignores_generic_requirement_features():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    repository = ItemMappingRepository(session_factory)
+    item = BillItem(
+        sequence="1.1",
+        item_code=None,
+        item_name="保护管",
+        feature_text="其他技术要求：满足相关技术规范及发包人要求",
+        unit="m",
+        quantity=Decimal("10"),
+        original_unit_price=None,
+        original_total_price=None,
+        work_content=None,
+        remark=None,
+        source=SourceRef("sample.xlsx", "Sheet1", 2),
+    )
+    item.features = FeatureSet(item.feature_text, {"其他技术要求": "满足相关技术规范及发包人要求"})
+
+    repository.upsert(ItemMappingInput("MAP-GENERIC", "保护管", "普通保护管", ["发包人", "技术规范"], "m", {}, "active"))
+
+    decision = repository.resolve(item)
+
+    assert decision.candidates
+    assert "特征关键词命中" not in decision.candidates[0].reason
+    assert "项目特征辅助匹配" not in decision.candidates[0].reason
+
+
 def test_sqlalchemy_price_rule_repository_crud_and_pagination():
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)

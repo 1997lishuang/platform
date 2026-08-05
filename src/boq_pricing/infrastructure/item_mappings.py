@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from boq_pricing.domain import BillItem
 from boq_pricing.infrastructure.db import session_scope
 from boq_pricing.infrastructure.orm_models import ItemMappingORM, ItemMappingReviewORM, ItemMappingSettingORM
+from boq_pricing.parsing.features import informative_feature_text, informative_features
 from boq_pricing.pricing.engine import compact, normalize_unit, score_name_match, value_matches
 
 
@@ -413,9 +414,9 @@ def score_mapping(mapping: ItemMappingORM, item: BillItem) -> MappingCandidate |
         score += 0.55 * name_similarity
         reasons.append(f"项目名称相似度 {name_similarity:.0%}")
 
-    features = item.features.values if item.features else {}
+    features = informative_features(item.features.values if item.features else {})
     feature_values = [compact(value).lower() for value in features.values() if compact(value)]
-    feature_text = compact(item.feature_text).lower()
+    feature_text = compact(informative_feature_text(item.feature_text)).lower()
     keywords = [compact(keyword).lower() for keyword in mapping.match_keywords_json or [] if compact(keyword)]
 
     keyword_hits = 0

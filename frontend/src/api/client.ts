@@ -439,7 +439,8 @@ export async function estimateMarketQuote(payload: {
 }) {
   const { data } = await api.post<MarketQuoteSummary>('/market-quotes/estimate', payload, {
     params: payload.provider ? { provider: payload.provider } : undefined,
-    headers: { 'x-user': 'estimator', 'x-user-role': 'estimator' }
+    headers: { 'x-user': 'estimator', 'x-user-role': 'estimator' },
+    timeout: 240000
   })
   return data
 }

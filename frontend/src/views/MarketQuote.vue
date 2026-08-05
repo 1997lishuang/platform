@@ -87,6 +87,9 @@
 
     <section ref="quoteFormPanel" class="panel">
       <p v-if="fillMessage" class="success">{{ fillMessage }}</p>
+      <div v-if="quoteStatusMessage" class="info-strip quote-wait-strip">
+        {{ quoteStatusMessage }}
+      </div>
       <h3>单项询价</h3>
       <div class="form-grid">
         <label>清单项目名称/询价对象<input v-model="form.itemName" /></label>
@@ -332,6 +335,7 @@ const taskTargetPageSize = ref(8)
 const selectedTaskTargetKeys = ref<string[]>([])
 const submittedTaskTargetKeys = ref<string[]>([])
 const targetQuoteMessages = ref<Record<string, string>>({})
+const quoteStatusMessage = ref('')
 const quoteRows = ref<MarketQuoteSummary[]>([])
 const quoteStatusFilter = ref('pending_review')
 const quotePage = ref(1)
@@ -357,6 +361,7 @@ const excelForm = reactive({
   standard: '',
   limit: 1
 })
+let quoteWaitTimers: number[] = []
 const excelStatusText = computed(() => {
   const status = excelTask.value?.status
   if (status === 'pending') return '等待处理'
@@ -402,6 +407,7 @@ async function estimate() {
   loading.value = true
   error.value = ''
   quote.value = null
+  startQuoteWaitMessages()
   try {
     quote.value = await estimateMarketQuote({
       provider: form.provider,
@@ -416,8 +422,12 @@ async function estimate() {
     markTargetSubmitted(selectedTargetKey.value, quote.value)
     await loadQuotes()
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : '市场询价失败'
+    error.value = formatQuoteError(caught)
+    if (isTimeoutError(caught)) {
+      await loadQuotes()
+    }
   } finally {
+    stopQuoteWaitMessages()
     loading.value = false
   }
 }
@@ -524,6 +534,7 @@ async function estimateSelectedTargets() {
   batchLoading.value = true
   error.value = ''
   quote.value = null
+  quoteStatusMessage.value = '批量询价正在逐项请求模型。联网搜索和模型排队会影响耗时，请保持页面打开。'
   let successCount = 0
   const failed: string[] = []
   try {
@@ -548,15 +559,51 @@ async function estimateSelectedTargets() {
         markTargetSubmitted(key, result)
         successCount += 1
       } catch (caught) {
-        failed.push(`${target.item_name}：${caught instanceof Error ? caught.message : '询价失败'}`)
+        failed.push(`${target.item_name}：${formatQuoteError(caught)}`)
       }
     }
     await loadQuotes()
     fillMessage.value = `批量询价完成：成功 ${successCount} 项，失败 ${failed.length} 项。`
     if (failed.length) error.value = failed.slice(0, 3).join('；')
   } finally {
+    quoteStatusMessage.value = ''
     batchLoading.value = false
   }
+}
+
+function startQuoteWaitMessages() {
+  stopQuoteWaitMessages()
+  quoteStatusMessage.value = '正在向模型渠道提交询价，请稍候。'
+  quoteWaitTimers = [
+    window.setTimeout(() => {
+      quoteStatusMessage.value = '模型仍在检索市场来源。联网搜索、渠道排队或响应较长时可能需要 1-3 分钟。'
+    }, 30000),
+    window.setTimeout(() => {
+      quoteStatusMessage.value = '仍在等待模型返回。若长期无响应，请检查平台配置中的模型渠道、联网搜索开关和超时时间。'
+    }, 90000),
+    window.setTimeout(() => {
+      quoteStatusMessage.value = '请求接近前端等待上限。后端模型可能仍在处理，超时后可稍后刷新待复核价格库查看是否已入库。'
+    }, 180000)
+  ]
+}
+
+function stopQuoteWaitMessages() {
+  for (const timer of quoteWaitTimers) window.clearTimeout(timer)
+  quoteWaitTimers = []
+  quoteStatusMessage.value = ''
+}
+
+function isTimeoutError(caught: unknown) {
+  const text = caught instanceof Error ? caught.message : String(caught)
+  return /timeout|exceeded|ECONNABORTED|超时/i.test(text)
+}
+
+function formatQuoteError(caught: unknown) {
+  const text = caught instanceof Error ? caught.message : String(caught)
+  if (isTimeoutError(caught)) {
+    return '市场询价等待超时：模型渠道长时间未返回。请检查“平台配置”的模型渠道、API Key、联网搜索是否可用，或把该渠道超时时间调小后重试；后端可能仍在处理，稍后刷新价格库查看是否已生成复核记录。'
+  }
+  return text || '市场询价失败'
 }
 
 function formatTargetFeatures(features: Record<string, unknown>) {
@@ -727,6 +774,7 @@ async function cancelExcelTask() {
 }
 
 onBeforeUnmount(() => {
+  stopQuoteWaitMessages()
   stopExcelPolling()
 })
 </script>

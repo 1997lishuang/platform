@@ -42,6 +42,15 @@ class FeatureParserTest(unittest.TestCase):
         self.assertEqual(features.values["技术标准名称"], "低压流体输送用焊接钢管")
         self.assertEqual(features.values["技术标准编号"], "GB/T3091-2015")
 
+    def test_ignores_generic_requirement_features(self):
+        features = FeatureParser().parse(
+            "规格:DN80\n其他技术要求:满足相关技术规范及发包人要求\n备注:详见设计图纸"
+        )
+
+        self.assertEqual(features.values["规格"], "DN80")
+        self.assertNotIn("其他技术要求", features.values)
+        self.assertNotIn("备注", features.values)
+
 
 if __name__ == "__main__":
     unittest.main()

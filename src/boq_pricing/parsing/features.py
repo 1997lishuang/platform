@@ -32,6 +32,29 @@ STANDARD_CODE_RE = re.compile(
     r"(?<![A-Za-z0-9])(?P<code>(?:GB/T|GB|JGJ|JTG|DL/T|NB/T|CECS|CJ/T|YB/T|SY/T|HG/T)\s*[\dA-Za-z./-]+(?:-\d{4})?)(?![A-Za-z0-9])",
     re.I,
 )
+SPECIFIC_VALUE_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:PHC|DN|GB/T|GB|JGJ|JTG|DL/T|NB/T|CECS|CJ/T|YB/T|SY/T|HG/T|C\d{2,3})|"
+    r"\d+(?:\.\d+)?\s*(?:mm|cm|m|米|kV|V|W|Wp|kW|MW|MPa|m2|m3|㎡|m²|m³|%)",
+    re.I,
+)
+GENERIC_FEATURE_KEYS = {
+    "其他技术要求",
+    "其他要求",
+    "技术要求",
+    "质量要求",
+    "施工要求",
+    "验收要求",
+    "备注",
+    "说明",
+}
+GENERIC_VALUE_RE = re.compile(
+    r"(满足|符合|执行|遵守|按照|按).{0,8}(相关|现行|国家|行业|地方|发包人|业主|设计|图纸|招标文件|技术)?"
+    r".{0,8}(规范|标准|要求|规定)|"
+    r"(满足|符合).{0,8}(发包人|业主|设计|图纸|招标文件).{0,8}要求|"
+    r"详见.{0,8}(图纸|设计|招标文件)|"
+    r"按.{0,8}(图纸|设计|规范|标准|发包人|业主).{0,8}(执行|要求|施工)",
+    re.I,
+)
 
 
 class FeatureParser:
@@ -47,7 +70,7 @@ class FeatureParser:
                 continue
             key = normalize_key(match.group("key"))
             value = normalize_value(match.group("value"))
-            if key and value:
+            if is_informative_feature(key, value):
                 values[key] = value
 
         enrich_domain_features(text, values)
@@ -72,6 +95,53 @@ def normalize_key(key: str) -> str:
 def normalize_value(value: str) -> str:
     value = re.sub(r"\s+", " ", value)
     return value.strip(" .、：:;；")
+
+
+def informative_features(values: dict[str, str] | None) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in dict(values or {}).items()
+        if is_informative_feature(str(key), str(value))
+    }
+
+
+def informative_feature_text(text: str | None) -> str:
+    chunks: list[str] = []
+    for line in split_feature_lines(normalize_text(text or "")):
+        match = KEY_VALUE_RE.match(line)
+        if match and not is_informative_feature(match.group("key"), match.group("value")):
+            continue
+        if is_generic_feature_value(line):
+            continue
+        chunks.append(line)
+    return "\n".join(chunks)
+
+
+def is_informative_feature(key: str | None, value: str | None) -> bool:
+    key_norm = normalize_key(str(key or ""))
+    value_norm = normalize_value(str(value or ""))
+    if not key_norm or not value_norm:
+        return False
+    if is_generic_feature_value(value_norm):
+        return False
+    if key_norm in GENERIC_FEATURE_KEYS and not has_specific_feature_signal(value_norm):
+        return False
+    return True
+
+
+def is_generic_feature_value(value: str | None) -> bool:
+    normalized = compact_for_match(value)
+    if not normalized:
+        return True
+    return bool(GENERIC_VALUE_RE.search(normalized) and not has_specific_feature_signal(normalized))
+
+
+def has_specific_feature_signal(value: str | None) -> bool:
+    return bool(SPECIFIC_VALUE_RE.search(compact_for_match(value)))
+
+
+def compact_for_match(value: str | None) -> str:
+    return re.sub(r"\s+", "", str(value or "")).strip()
 
 
 def enrich_domain_features(text: str, values: dict[str, str]) -> None:

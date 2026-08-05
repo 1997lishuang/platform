@@ -5,6 +5,7 @@ from decimal import Decimal
 import re
 
 from boq_pricing.domain import BillItem, PriceQuote, PriceRule
+from boq_pricing.parsing.features import informative_feature_text, informative_features
 from boq_pricing.pricing.calculations import calculate_total_price
 
 
@@ -73,8 +74,8 @@ class PricingEngine:
 
     def suggest_rule_mappings(self, item: BillItem, min_score: float = 0.45) -> list[tuple[str, str, float, str]]:
         suggestions: list[tuple[str, str, float, str]] = []
-        features = item.features.values if item.features else {}
-        feature_text = compact(item.feature_text).lower()
+        features = informative_features(item.features.values if item.features else {})
+        feature_text = compact(informative_feature_text(item.feature_text)).lower()
         feature_values = [compact(value).lower() for value in features.values() if compact(value)]
         for rule in self._rules:
             name_similarity = score_name_match(item.item_name, rule.item_name_contains)

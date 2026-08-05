@@ -123,6 +123,12 @@ def _market_quote_error_detail(message: str, provider: str | None) -> str:
             "请在火山方舟控制台开通联网搜索，或关闭联网搜索后使用普通模型询价。"
             f"原始错误：{message}"
         )
+    if "timed out" in message or "timeout" in message:
+        return (
+            f"{provider_label} 模型渠道读取超时：模型或联网搜索在配置的等待时间内没有返回。"
+            "请在“平台配置”检查模型是否可用、联网搜索是否稳定；也可以临时关闭联网搜索、缩短询价对象描述后重试。"
+            f"原始错误：{message}"
+        )
     return message
 
 
